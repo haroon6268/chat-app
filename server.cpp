@@ -1,0 +1,106 @@
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <array>
+#include <netdb.h>
+#include <cerrno>
+#include <iostream>
+#include <unistd.h>
+
+int main(int argc, char* argv[])
+{
+
+  if(argc != 2)
+  {
+    std::cout << "Usage: ./<app_name> <port_number>" << std::endl;
+    exit(1);
+  }
+  
+  int port;
+
+  try
+  {
+    port = std::stoi(argv[1]); 
+  }
+  catch(const std::exception& e)
+  {
+    std::cerr << "Invalid port: " << e.what() << std::endl;
+  }
+
+  struct addrinfo hints{};
+  struct addrinfo *servinfo;
+  
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE; //ASSIGNS LOCAL HOST TO SOCKET
+ 
+  int status{};
+  if((status = getaddrinfo(nullptr, argv[1], &hints, &servinfo)) != 0)
+  {
+    std::cerr << "getaddrinfo err::" << gai_strerror(status) << std::endl;
+    exit(1);
+  }
+  
+  int sockfd {socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol)};
+  
+  if(bind(sockfd, servinfo->ai_addr, servinfo->ai_addrlen) == -1)
+  {
+    std::cerr << "bind failed" << std::endl;
+    exit(1);
+  }
+
+  freeaddrinfo(servinfo);
+
+  if(listen(sockfd, SOMAXCONN) == -1)
+  {
+    std::cerr << "listen failed" << std::endl;
+    exit(1);
+  }
+
+  struct sockaddr_storage recvAddr{};
+  socklen_t addrSize{sizeof(recvAddr)};
+
+  int new_fd = accept(sockfd, (struct sockaddr *)&recvAddr, &addrSize);
+  if(new_fd == -1)
+  {
+    std::cerr << "Accept failed" << std::endl;
+    close(new_fd);
+    exit(1);
+  }
+
+  std::string msg = "Welcome to the Chat Server!";
+  send(new_fd, msg.c_str(), msg.length(), 0);
+  
+  std::array<char, 1024> buf{};
+  
+  std::string message{};
+
+  while(true)
+  {
+    int status;
+    status = recv(new_fd, buf.data(), buf.size(), 0);
+    if(status > 0)
+    {
+      message.append(buf.data(), status);
+    }
+    else if(status == 0)
+    {
+      std::cout << "Client disconnect..." << std::endl;
+      close(new_fd);
+      break;
+    }
+    else
+    {
+      std::cerr << "Error with recv::" << strerror(errno) << std::endl;
+      close(new_fd);
+      close(sockfd);
+      exit(1);
+    }
+
+  }
+  std::cout << message << std::endl;
+  close(sockfd);
+  
+  exit(1);
+
+
+}
