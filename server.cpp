@@ -1,3 +1,6 @@
+#include <cstddef>
+#include <cstring>
+#include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <array>
@@ -5,6 +8,11 @@
 #include <cerrno>
 #include <iostream>
 #include <unistd.h>
+#include <cstdint>
+#include <thread>
+#include "serialize.hpp"
+
+void handleRequest(int clientFd);
 
 int main(int argc, char* argv[])
 {
@@ -70,24 +78,30 @@ int main(int argc, char* argv[])
   std::string msg = "Welcome to the Chat Server!";
   send(new_fd, msg.c_str(), msg.length(), 0);
   
-  std::array<char, 1024> buf{};
+  std::vector<char> buf{};
+  buf.resize(1024);
   
   std::string message{};
-
+  
+  int totalReceived{};
+  int curMessageLength{-1};
+  
   while(true)
   {
     int status;
-    status = recv(new_fd, buf.data(), buf.size(), 0);
+    status = recv(new_fd, buf.data(), 515, 0);
+
     if(status > 0)
     {
+      totalReceived += status;
       message.append(buf.data(), status);
     }
+
     else if(status == 0)
     {
       std::cout << "Client disconnect..." << std::endl;
-      close(new_fd);
-      break;
     }
+
     else
     {
       std::cerr << "Error with recv::" << strerror(errno) << std::endl;
@@ -96,11 +110,99 @@ int main(int argc, char* argv[])
       exit(1);
     }
 
+    if(curMessageLength == -1)
+    {
+      uint16_t messageLength{};
+      std::memcpy(&messageLength, &buf[0], 2);
+      curMessageLength = ntohs(messageLength);
+    }
+    
+    //3 for message length and message type. + to curMessage length to check if we have the complete data then extract
+    if(totalReceived >= 3 + curMessageLength)
+    {
+      std::array<char, BUFSIZE> tempBuf{};
+      std::copy(buf.begin(), buf.begin() + 3 + curMessageLength, tempBuf.begin());
+      buf.erase(buf.begin(), buf.begin() + 3 + curMessageLength);
+      
+      Message message{};
+
+      deserializeMessage(tempBuf, message);
+
+      std::string str {message.message, static_cast<std::size_t>(curMessageLength)};
+
+      std::cout << str << std::endl;
+
+      curMessageLength = -1;
+
+    }
+
   }
   std::cout << message << std::endl;
   close(sockfd);
   
   exit(1);
 
+
+}
+
+
+void handleRequest(int clientFd)
+{
+  int totalReceived{};
+  int curMessageLength{-1};
+
+  std::vector<char> buf{};
+  buf.resize(1024);
+  
+  while(true)
+  {
+    int status;
+    status = recv(clientFd, buf.data(), 515, 0);
+
+    if(status > 0)
+    {
+      totalReceived += status;
+      if(curMessageLength == -1)
+      {
+        uint16_t messageLength{};
+        std::memcpy(&messageLength, &buf[0], 2);
+        curMessageLength = ntohs(messageLength);
+      }
+    
+    //3 for message length and message type. + to curMessage length to check if we have the complete data then extract
+      if(totalReceived >= 3 + curMessageLength)
+      {
+        std::array<char, BUFSIZE> tempBuf{};
+        std::copy(buf.begin(), buf.begin() + 3 + curMessageLength, tempBuf.begin());
+        buf.erase(buf.begin(), buf.begin() + 3 + curMessageLength);
+      
+        Message message{};
+
+        deserializeMessage(tempBuf, message);
+
+        std::string str {message.message, static_cast<std::size_t>(curMessageLength)};
+
+        std::cout << str << std::endl;
+
+        curMessageLength = -1;
+
+     }
+
+    }
+
+    else if(status == 0)
+    {
+      std::cout << "Client disconnect..." << std::endl;
+    }
+
+    else
+    {
+      std::cerr << "Error with recv::" << strerror(errno) << std::endl;
+      close(clientFd);
+      exit(1);
+    }
+
+    
+  }
 
 }

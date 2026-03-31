@@ -6,6 +6,7 @@
 #include <array>
 #include <string>
 #include <unistd.h>
+#include "serialize.hpp"
 
 int main(int argc, char* argv[])
 {
@@ -48,9 +49,37 @@ int main(int argc, char* argv[])
   message.append(buf.data(), size);
 
   std::cout << message << std::endl;
+  
+  while(true)
+  {
+    Message message {};
+    
+    std::cout << "Enter Message: ";
+    
+    std::string input{};
+    std::getline(std::cin, input);
 
-  std::string msg = "Thank you for welcoming me!";
-  send(sockfd, msg.c_str(), msg.length(), 0);
+    if(input.length() >= 512)
+    {
+      std::cout << "Message must be less than 512 characters!" << std::endl;
+      continue;
+    }
+    
+    std::memcpy(message.message, input.c_str(), input.length());
+    
+    message.header.messageLength = input.length();
+
+    message.header.messageType = CHAT;
+
+    int messageSize = 3 + message.header.messageLength; // 3 bytes for message length + messageType then length the mesasge
+
+    std::array<char, BUFSIZE> buf{};
+    
+    serializeMessage(message, buf);
+
+    send(sockfd, buf.data(), messageSize, 0);
+
+  }
   
   close(sockfd);
   exit(0);

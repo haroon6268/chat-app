@@ -1,2 +1,2 @@
 all:
-	g++ server.cpp -o server && g++ client.cpp -o client
+	g++ server.cpp serialize.cpp -I. -o server && g++ client.cpp serialize.cpp -I. -o client
