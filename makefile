@@ -1,2 +1,2 @@
 all:
-	g++ server.cpp serialize.cpp -I. -o server && g++ client.cpp serialize.cpp -I. -o client
+	g++ ChatServer.cpp serialize.cpp Server.cpp -I. -o server && g++ ChatClient.cpp serialize.cpp -I. -o client

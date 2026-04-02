@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
   hints.ai_flags = AI_PASSIVE; //ASSIGNS LOCAL HOST TO SOCKET
  
   int status{};
-  if((status = getaddrinfo(nullptr, argv[1], &hints, &servinfo)) != 0)
+  if((status = getaddrinfo("127.0.0.1", argv[1], &hints, &servinfo)) != 0)
   {
     std::cerr << "getaddrinfo err::" << gai_strerror(status) << std::endl;
     exit(1);

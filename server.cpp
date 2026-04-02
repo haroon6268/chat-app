@@ -1,54 +1,37 @@
-#include <cstddef>
-#include <cstring>
+#include "Server.hpp"
+#include "serialize.hpp"
+#include <thread>
+#include <unistd.h>
+#include <cerrno>
 #include <arpa/inet.h>
+#include <iostream>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <array>
 #include <netdb.h>
-#include <cerrno>
-#include <iostream>
-#include <unistd.h>
-#include <cstdint>
-#include <thread>
-#include "serialize.hpp"
 
-void handleRequest(int clientFd);
-
-int main(int argc, char* argv[])
+Server::Server(std::string port) : port{port}
 {
+  init(); 
+}
 
-  if(argc != 2)
-  {
-    std::cout << "Usage: ./<app_name> <port_number>" << std::endl;
-    exit(1);
-  }
-  
-  int port;
-
-  try
-  {
-    port = std::stoi(argv[1]); 
-  }
-  catch(const std::exception& e)
-  {
-    std::cerr << "Invalid port: " << e.what() << std::endl;
-  }
-
+void Server::init()
+{
+   
   struct addrinfo hints{};
   struct addrinfo *servinfo;
   
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags = AI_PASSIVE; //ASSIGNS LOCAL HOST TO SOCKET
- 
+  hints.ai_flags = AI_PASSIVE; //ASSIGNS ALL LOCAL ADDRESSES TO BE USABLE
+  
   int status{};
-  if((status = getaddrinfo(nullptr, argv[1], &hints, &servinfo)) != 0)
+  if((status = getaddrinfo(nullptr, port.c_str(), &hints, &servinfo)) != 0)
   {
     std::cerr << "getaddrinfo err::" << gai_strerror(status) << std::endl;
     exit(1);
   }
   
-  int sockfd {socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol)};
+  sockfd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
   
   if(bind(sockfd, servinfo->ai_addr, servinfo->ai_addrlen) == -1)
   {
@@ -57,7 +40,11 @@ int main(int argc, char* argv[])
   }
 
   freeaddrinfo(servinfo);
+    
+}
 
+void Server::startListening()
+{
   if(listen(sockfd, SOMAXCONN) == -1)
   {
     std::cerr << "listen failed" << std::endl;
@@ -74,22 +61,15 @@ int main(int argc, char* argv[])
     {
       std::cerr << "Accept failed" << std::endl;
       close(clientFd);
-      exit(1);
     }
-    std::thread worker(handleRequest, clientFd);
+    std::thread worker(&Server::handleRequest, clientFd);
     worker.detach();
   }
-  
-  
-  close(sockfd);
-  
-  exit(1);
-
-
+ 
 }
 
 
-void handleRequest(int clientFd)
+void Server::handleRequest(int clientFd)
 {
   int totalReceived{};
   int curMessageLength{-1};
@@ -138,13 +118,15 @@ void handleRequest(int clientFd)
     else if(status == 0)
     {
       std::cout << "Client disconnect..." << std::endl;
+      close(clientFd);
+      return;
     }
 
     else
     {
       std::cerr << "Error with recv::" << strerror(errno) << std::endl;
       close(clientFd);
-      exit(1);
+      return;
     }
 
     
