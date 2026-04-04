@@ -12,6 +12,7 @@
 Server::Server(std::string port) : port{port}
 {
   init(); 
+  rooms.emplace("lobby", "lobby");
 }
 
 void Server::init()
@@ -19,7 +20,6 @@ void Server::init()
    
   struct addrinfo hints{};
   struct addrinfo *servinfo;
-  
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE; //ASSIGNS ALL LOCAL ADDRESSES TO BE USABLE
@@ -62,7 +62,10 @@ void Server::startListening()
       std::cerr << "Accept failed" << std::endl;
       close(clientFd);
     }
-    std::thread worker(&Server::handleRequest, clientFd);
+    
+    rooms["lobby"].addUser(clientFd);
+
+    std::thread worker(&Server::handleRequest, this, clientFd);
     worker.detach();
   }
  
@@ -73,11 +76,11 @@ void Server::handleRequest(int clientFd)
 {
   int totalReceived{};
   int curMessageLength{-1};
-
+  
   std::vector<char> buf{};
   buf.resize(1024);
-  std::string msg = "Welcome to the Chat Server!";
-  send(clientFd, msg.c_str(), msg.length(), 0);
+  std::string msg = "New user has joined the server!";
+  rooms["lobby"].sendMessage(msg);
  
   while(true)
   {
@@ -89,17 +92,17 @@ void Server::handleRequest(int clientFd)
       totalReceived += status;
       if(curMessageLength == -1)
       {
-        uint16_t messageLength{};
-        std::memcpy(&messageLength, &buf[0], 2);
-        curMessageLength = ntohs(messageLength);
+        uint32_t messageLength{};
+        std::memcpy(&messageLength, &buf[0], 4);
+        curMessageLength = ntohl(messageLength);
       }
     
-    //3 for message length and message type. + to curMessage length to check if we have the complete data then extract
-      if(totalReceived >= 3 + curMessageLength)
+    //4 for message length header + message length to check if we have the complete data then extract
+      if(totalReceived >= 4 + curMessageLength)
       {
         std::array<char, BUFSIZE> tempBuf{};
-        std::copy(buf.begin(), buf.begin() + 3 + curMessageLength, tempBuf.begin());
-        buf.erase(buf.begin(), buf.begin() + 3 + curMessageLength);
+        std::copy(buf.begin(), buf.begin() + 4 + curMessageLength, tempBuf.begin());
+        buf.erase(buf.begin(), buf.begin() + 4 + curMessageLength);
       
         Message message{};
 
@@ -107,8 +110,7 @@ void Server::handleRequest(int clientFd)
 
         std::string str {message.message, static_cast<std::size_t>(curMessageLength)};
 
-        std::cout << str << std::endl;
-
+        rooms["lobby"].sendMessage(str);
         curMessageLength = -1;
 
      }

@@ -4,8 +4,7 @@
 #include <array>
 
 struct {
-  uint16_t messageLength;
-  uint8_t messageType;
+  uint32_t messageLength;
 } typedef Header;
 
 struct {
@@ -13,12 +12,7 @@ struct {
   char message[512];
 } typedef Message;
 
-enum MessageType
-{
-  CHAT
-};
-
-constexpr int BUFSIZE = 2 + 1 + 512;
+constexpr int BUFSIZE = 4 + 512;
 
 void serializeMessage(const Message& message, std::array<char, BUFSIZE>& buf);
 void deserializeMessage(const std::array<char, BUFSIZE>& buf, Message& message);

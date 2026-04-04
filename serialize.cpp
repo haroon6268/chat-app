@@ -3,27 +3,25 @@
 void serializeMessage(const Message& message, std::array<char, BUFSIZE>& buf)
 {
   //CONVERT NUMERIC TYPES TO NETWORK ORDER
-  uint16_t messageLength = htons(message.header.messageLength);
+  uint32_t messageLength = htonl(message.header.messageLength);
 
-  //message length [2] -> message type [1] -> message[512]
+  //message length [4] -> message[512]
 
-  std::memcpy(&buf[0], &messageLength, 2);
-  std::memcpy(&buf[2], &message.header.messageType, 1);
-  std::memcpy(&buf[3], message.message,  message.header.messageLength);
+  std::memcpy(&buf[0], &messageLength, 4);
+  std::memcpy(&buf[4], message.message,  message.header.messageLength);
 
 }
 
 void deserializeMessage(const std::array<char, BUFSIZE>& buf, Message& message)
 {
-  uint16_t messageLength{};
+  uint32_t messageLength{};
   
-  std::memcpy(&messageLength, &buf[0], 2);
-  messageLength = ntohs(messageLength);
+  std::memcpy(&messageLength, &buf[0], 4);
+  messageLength = ntohl(messageLength);
   message.header.messageLength = messageLength;
 
-  std::memcpy(&message.header.messageType, &buf[2], 1);
 
-  std::memcpy(message.message, &buf[3], messageLength);
+  std::memcpy(message.message, &buf[4], messageLength);
 
 }
 

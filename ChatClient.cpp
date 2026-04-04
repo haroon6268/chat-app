@@ -5,8 +5,73 @@
 #include <iostream>
 #include <array>
 #include <string>
+#include <thread>
 #include <unistd.h>
 #include "serialize.hpp"
+
+void handleReceivedMessages(int sockfd)
+{
+int totalReceived{};
+int curMessageLength{-1};
+
+std::vector<char> buf{};
+buf.resize(1024);
+
+while(true)
+{
+  int status;
+  status = recv(sockfd, buf.data(), 515, 0);
+
+  if(status > 0)
+  {
+    totalReceived += status;
+    if(curMessageLength == -1)
+    {
+      uint32_t messageLength{};
+      std::memcpy(&messageLength, &buf[0], 4);
+      curMessageLength = ntohl(messageLength);
+    }
+  
+  //4 for message length header + message length to check if we have the complete data then extract
+    if(totalReceived >= 4 + curMessageLength)
+    {
+      std::array<char, BUFSIZE> tempBuf{};
+      std::copy(buf.begin(), buf.begin() + 4 + curMessageLength, tempBuf.begin());
+      buf.erase(buf.begin(), buf.begin() + 4 + curMessageLength);
+    
+      Message message{};
+
+      deserializeMessage(tempBuf, message);
+
+      std::string str {message.message, static_cast<std::size_t>(curMessageLength)};
+      std::cout << str << std::endl;
+
+      curMessageLength = -1;
+
+   }
+
+  }
+
+  else if(status == 0)
+  {
+    std::cout << "Client disconnect..." << std::endl;
+    close(sockfd);
+    return;
+  }
+
+  else
+  {
+    std::cerr << "Error with recv::" << strerror(errno) << std::endl;
+    close(sockfd);
+    return;
+  }
+
+  
+}
+
+
+}
+
 
 int main(int argc, char* argv[])
 {
@@ -49,6 +114,8 @@ int main(int argc, char* argv[])
   message.append(buf.data(), size);
 
   std::cout << message << std::endl;
+
+  std::thread worker(handleReceivedMessages, sockfd);
   
   while(true)
   {
@@ -69,9 +136,7 @@ int main(int argc, char* argv[])
     
     message.header.messageLength = input.length();
 
-    message.header.messageType = CHAT;
-
-    int messageSize = 3 + message.header.messageLength; // 3 bytes for message length + messageType then length the mesasge
+    int messageSize = 4 + message.header.messageLength; // 4 bytes for message length header + message
 
     std::array<char, BUFSIZE> buf{};
     
