@@ -20,12 +20,12 @@ buf.resize(1024);
 while(true)
 {
   int status;
-  status = recv(sockfd, buf.data(), 515, 0);
+  status = recv(sockfd, buf.data() + totalReceived, 515, 0);
 
   if(status > 0)
   {
     totalReceived += status;
-    if(curMessageLength == -1)
+    if(curMessageLength == -1 and totalReceived >= 4)
     {
       uint32_t messageLength{};
       std::memcpy(&messageLength, &buf[0], 4);
@@ -33,11 +33,12 @@ while(true)
     }
   
   //4 for message length header + message length to check if we have the complete data then extract
-    if(totalReceived >= 4 + curMessageLength)
+    if(curMessageLength != -1 && totalReceived >= headerSize + curMessageLength)
     {
       std::array<char, BUFSIZE> tempBuf{};
-      std::copy(buf.begin(), buf.begin() + 4 + curMessageLength, tempBuf.begin());
-      buf.erase(buf.begin(), buf.begin() + 4 + curMessageLength);
+      std::copy(buf.begin(), buf.begin() + headerSize + curMessageLength, tempBuf.begin());
+      buf.erase(buf.begin(), buf.begin() + headerSize + curMessageLength);
+      buf.resize(1024);
     
       Message message{};
 
@@ -46,8 +47,9 @@ while(true)
       std::string str {message.message, static_cast<std::size_t>(curMessageLength)};
       std::cout << str << std::endl;
 
+      totalReceived -= headerSize + curMessageLength;
       curMessageLength = -1;
-
+      
    }
 
   }
@@ -135,8 +137,9 @@ int main(int argc, char* argv[])
     std::memcpy(message.message, input.c_str(), input.length());
     
     message.header.messageLength = input.length();
+    message.header.type = MESSAGE;
 
-    int messageSize = 4 + message.header.messageLength; // 4 bytes for message length header + message
+    int messageSize = headerSize + message.header.messageLength; 
 
     std::array<char, BUFSIZE> buf{};
     

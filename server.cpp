@@ -60,11 +60,10 @@ void Server::startListening()
     if(clientFd == -1)
     {
       std::cerr << "Accept failed" << std::endl;
-      close(clientFd);
+      continue;
     }
     
-    rooms["lobby"].addUser(clientFd);
-
+    //rooms["lobby"].addUser(clientFd);
     std::thread worker(&Server::handleRequest, this, clientFd);
     worker.detach();
   }
@@ -80,17 +79,20 @@ void Server::handleRequest(int clientFd)
   std::vector<char> buf{};
   buf.resize(1024);
   std::string msg = "New user has joined the server!";
-  rooms["lobby"].sendMessage(msg);
+  int id {addUser("test", clientFd)};
+  auto& user {allUsers[id]};
+  user->sendMessage(msg);
+  //rooms["lobby"].sendMessage(msg);
  
   while(true)
   {
     int status;
-    status = recv(clientFd, buf.data(), 515, 0);
+    status = recv(user->sockfd, buf.data() + totalReceived, 515, 0);
 
     if(status > 0)
     {
       totalReceived += status;
-      if(curMessageLength == -1)
+      if(curMessageLength == -1 && totalReceived >= 4)
       {
         uint32_t messageLength{};
         std::memcpy(&messageLength, &buf[0], 4);
@@ -98,11 +100,11 @@ void Server::handleRequest(int clientFd)
       }
     
     //4 for message length header + message length to check if we have the complete data then extract
-      if(totalReceived >= 4 + curMessageLength)
+      if(curMessageLength != -1 && totalReceived >= headerSize + curMessageLength)
       {
         std::array<char, BUFSIZE> tempBuf{};
-        std::copy(buf.begin(), buf.begin() + 4 + curMessageLength, tempBuf.begin());
-        buf.erase(buf.begin(), buf.begin() + 4 + curMessageLength);
+        std::copy(buf.begin(), buf.begin() + headerSize + curMessageLength, tempBuf.begin());
+        buf.erase(buf.begin(), buf.begin() + headerSize + curMessageLength);
       
         Message message{};
 
@@ -110,7 +112,8 @@ void Server::handleRequest(int clientFd)
 
         std::string str {message.message, static_cast<std::size_t>(curMessageLength)};
 
-        rooms["lobby"].sendMessage(str);
+//        rooms["lobby"].sendMessage(str);
+        totalReceived -= headerSize + curMessageLength;
         curMessageLength = -1;
 
      }
@@ -120,18 +123,60 @@ void Server::handleRequest(int clientFd)
     else if(status == 0)
     {
       std::cout << "Client disconnect..." << std::endl;
-      close(clientFd);
+      close(user->sockfd);
       return;
     }
 
     else
     {
       std::cerr << "Error with recv::" << strerror(errno) << std::endl;
-      close(clientFd);
+      close(user->sockfd);
       return;
     }
 
     
   }
 
+}
+
+bool Server::doesNickExist(const std::string& nick)
+{
+  if(allNicks.contains(nick))
+  {
+    return true;
+  }
+  return false;
+}
+
+int Server::addUser(std::string nick, int sockfd)
+{
+  bool isNickAdded{addNick(nick)};
+  if(!isNickAdded)
+  {
+    return -1;
+  }
+  
+  std::lock_guard<std::mutex> mtx(userMutex);
+  auto u = std::make_unique<User>(nick, sockfd);
+  auto id = u->id;
+  allUsers[u->id] = std::move(u);
+
+  return id;
+}
+
+bool Server::addNick(std::string nick)
+{
+  std::lock_guard<std::mutex> mtx(nickMutex);
+  if(allNicks.contains(nick))
+  {
+    return false;
+  }
+  allNicks.insert(nick);
+  return true;
+}
+
+void Server::removeNick(std::string nick)
+{
+  std::lock_guard<std::mutex> mtx(nickMutex);
+  allNicks.erase(nick);
 }
