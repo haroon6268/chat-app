@@ -44,7 +44,7 @@ while(true)
 
       deserializeMessage(tempBuf, message);
 
-      std::string str {message.message, static_cast<std::size_t>(curMessageLength)};
+      std::string str {message.messageUnion.message, static_cast<std::size_t>(curMessageLength)};
       std::cout << str << std::endl;
 
       totalReceived -= headerSize + curMessageLength;
@@ -77,9 +77,9 @@ while(true)
 
 int main(int argc, char* argv[])
 {
-  if(argc != 2)
+  if(argc != 3)
   {
-    std::cout << "Usage: ./<app_name> <port_number>" << std::endl;
+    std::cout << "Usage: ./<app_name> <port_number> <nick>" << std::endl;
     exit(1);
   }
 
@@ -107,16 +107,20 @@ int main(int argc, char* argv[])
   }
   
   freeaddrinfo(servinfo);
-
-  std::array<char, 1024> buf{};
   
-  std::string message{};
+  std::array<char, BUFSIZE> bufinit{};
+  
+  std::string nick {argv[2]};
+  Header header{.messageLength = static_cast<uint32_t>(nick.length()) + 1, .type = INIT};
+  MessageUnion messageUnion{.init = {1}};
+  std::memcpy(messageUnion.init.nick, nick.c_str(), nick.length());
 
-  int size = recv(sockfd, buf.data(), buf.size(), 0);
-  message.append(buf.data(), size);
+  Message init{header, messageUnion};
 
-  std::cout << message << std::endl;
+  serializeMessage(init, bufinit);
 
+  send(sockfd, bufinit.data(), headerSize + static_cast<uint32_t>(nick.length()) + 1, 0);
+  
   std::thread worker(handleReceivedMessages, sockfd);
   
   while(true)
@@ -134,7 +138,7 @@ int main(int argc, char* argv[])
       continue;
     }
     
-    std::memcpy(message.message, input.c_str(), input.length());
+    std::memcpy(message.messageUnion.message, input.c_str(), input.length());
     
     message.header.messageLength = input.length();
     message.header.type = MESSAGE;

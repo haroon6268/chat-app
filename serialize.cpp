@@ -10,7 +10,19 @@ void serializeMessage(const Message& message, std::array<char, BUFSIZE>& buf)
 
   std::memcpy(&buf[0], &messageLength, 4);
   std::memcpy(&buf[4], &messageType, 4); 
-  std::memcpy(&buf[8], message.message,  message.header.messageLength);
+  
+  switch(message.header.type)
+  {
+    case(MESSAGE):
+      std::memcpy(&buf[8], message.messageUnion.message,  message.header.messageLength);
+      break;
+    case(INIT):
+      std::memcpy(&buf[8], &message.messageUnion.init.id, 1);
+      std::memcpy(&buf[9], message.messageUnion.init.nick, message.header.messageLength - 1);
+      break;
+    case(CHANGE_NICK):
+      break; 
+  }
 
 }
 
@@ -26,7 +38,19 @@ void deserializeMessage(const std::array<char, BUFSIZE>& buf, Message& message)
   std::memcpy(&messageType, &buf[4], 4);
   messageType = ntohl(messageType);
   message.header.type = static_cast<MessageType>(messageType);
-  std::memcpy(message.message, &buf[8], messageLength);
+
+  switch(message.header.type)
+  {
+    case(MESSAGE):
+      std::memcpy(message.messageUnion.message, &buf[8], messageLength);
+      break;
+    case(INIT):
+      std::memcpy(&message.messageUnion.init.id, &buf[8], 1);
+      std::memcpy(message.messageUnion.init.nick, &buf[9], messageLength - 1);
+      break;
+    case(CHANGE_NICK):
+      break;
+  }
 
 }
 

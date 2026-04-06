@@ -61,7 +61,7 @@ void Server::startListening()
     {
       std::cerr << "Accept failed" << std::endl;
       continue;
-    }
+  }
     
     //rooms["lobby"].addUser(clientFd);
     std::thread worker(&Server::handleRequest, this, clientFd);
@@ -71,7 +71,7 @@ void Server::startListening()
 }
 
 
-void Server::handleRequest(int clientFd)
+void Server::handleRequest(int clientfd)
 {
   int totalReceived{};
   int curMessageLength{-1};
@@ -79,29 +79,34 @@ void Server::handleRequest(int clientFd)
   std::vector<char> buf{};
   buf.resize(1024);
   std::string msg = "New user has joined the server!";
-  int id {addUser("test", clientFd)};
-  auto& user {allUsers[id]};
-  user->sendMessage(msg);
-  //rooms["lobby"].sendMessage(msg);
+//  auto id = addUser("test", clientFd);
+// auto& user {allUsers[id]};
+//  user->sendMessage(msg);
+//  rooms["lobby"].sendMessage(msg);
+  
  
   while(true)
   {
     int status;
-    status = recv(user->sockfd, buf.data() + totalReceived, 515, 0);
+    status = recv(clientfd, buf.data() + totalReceived, 515, 0);
 
     if(status > 0)
     {
       totalReceived += status;
+      std::cout << "Total Received: " << totalReceived << std::endl;
       if(curMessageLength == -1 && totalReceived >= 4)
       {
         uint32_t messageLength{};
         std::memcpy(&messageLength, &buf[0], 4);
         curMessageLength = ntohl(messageLength);
+        std::cout << "Set msg length: " << curMessageLength << std::endl;
+
       }
     
     //4 for message length header + message length to check if we have the complete data then extract
       if(curMessageLength != -1 && totalReceived >= headerSize + curMessageLength)
       {
+        std::cout << "processing msg" << std::endl;
         std::array<char, BUFSIZE> tempBuf{};
         std::copy(buf.begin(), buf.begin() + headerSize + curMessageLength, tempBuf.begin());
         buf.erase(buf.begin(), buf.begin() + headerSize + curMessageLength);
@@ -109,10 +114,27 @@ void Server::handleRequest(int clientFd)
         Message message{};
 
         deserializeMessage(tempBuf, message);
+        
+        std::cout << "Before switch. The message type is: " << message.header.type << std::endl;
+        switch(message.header.type)
+        {
+          case(INIT): 
+            {
+              std::string nick{message.messageUnion.init.nick, static_cast<size_t>(curMessageLength) - 1};
+              std::cout << nick << std::endl;
+              break;
+            }
+          case(MESSAGE):
+            {
+              std::string str {message.messageUnion.message, static_cast<std::size_t>(curMessageLength)};
+              std::cout << str << std::endl;
+              break;
+            }
+            break;
+          case(CHANGE_NICK):
+            break;
+        }
 
-        std::string str {message.message, static_cast<std::size_t>(curMessageLength)};
-
-//        rooms["lobby"].sendMessage(str);
         totalReceived -= headerSize + curMessageLength;
         curMessageLength = -1;
 

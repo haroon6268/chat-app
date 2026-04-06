@@ -9,6 +9,17 @@ enum MessageType : uint32_t
   MESSAGE,
   CHANGE_NICK,
 };
+struct {
+
+  uint8_t id;
+  char nick[100];
+} typedef Init;
+
+union {
+  char message[512];
+  Init init;
+} typedef MessageUnion;
+
 
 struct {
   uint32_t messageLength;
@@ -17,9 +28,10 @@ struct {
 
 struct {
   Header header;
-  char message[512];
+  MessageUnion messageUnion;
 } typedef Message;
 
+//IF MESSAGE IS INIT, 8 bits for ID, then subtract 8 from message length to get nickname
 constexpr int BUFSIZE = 4 + 512;
 constexpr int headerSize = sizeof(uint32_t) + sizeof(MessageType);
 

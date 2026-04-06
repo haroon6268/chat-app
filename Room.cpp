@@ -35,7 +35,7 @@ void Room::sendMessage(std::string message)
   {
     Header header {static_cast<uint32_t>(message.size())};
     Message msg{header};
-    std::memcpy(msg.message, message.c_str(), message.size());
+    std::memcpy(msg.messageUnion.message, message.c_str(), message.size());
     
     std::array<char, BUFSIZE> buf;
     serializeMessage(msg, buf);

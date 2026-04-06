@@ -13,7 +13,7 @@ void User::sendMessage(const std::string& msg)
 
   Header header {static_cast<uint32_t>(msg.size()), MESSAGE};
   Message message{header};
-  std::memcpy(message.message, msg.c_str(), msg.size());
+  std::memcpy(message.messageUnion.message, msg.c_str(), msg.size());
 
   std::array<char, BUFSIZE> buf;
   serializeMessage(message, buf);
